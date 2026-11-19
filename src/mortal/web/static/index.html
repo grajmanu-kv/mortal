@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mortal</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-phase="morning">
+
+<header class="bar">
+  <a class="brand" href="#/" title="All lives">MORTAL<span class="brand-sub">a life under a demi-god</span></a>
+  <div id="bar-life" class="bar-life" hidden>
+    <span id="clock" class="chip">Day 1 06:00</span>
+    <span id="weather" class="chip dim"></span>
+    <span id="thinking" class="chip think" hidden></span>
+  </div>
+  <div id="bar-controls" class="bar-controls" hidden>
+    <button id="btn-play" class="btn primary" title="Play / pause">&gt; play</button>
+    <button id="btn-step" class="btn" title="Advance one tick (10 minutes)">step</button>
+    <label class="speed">speed
+      <select id="speed"></select>
+    </label>
+  </div>
+  <span id="conn" class="chip dim conn" hidden>connecting...</span>
+</header>
+
+<!-- ============================== HOME: create / resume ============================== -->
+<main id="home" class="home" hidden>
+  <section class="panel">
+    <h2>Begin a life</h2>
+    <form id="create-form" class="form" autocomplete="off">
+      <div class="row">
+        <label class="grow">Name<input name="name" required maxlength="60" placeholder="Ayo"></label>
+        <label class="narrow">Age<input name="age" type="number" min="0" max="120" value="34"></label>
+      </div>
+      <div class="row">
+        <label class="grow">Occupation<input name="occupation" maxlength="80" placeholder="clerk (leave empty for none)"></label>
+        <label class="narrow">Wage / hour<input name="wage" type="number" min="0" max="1000" step="0.5" value="12"></label>
+      </div>
+      <label>Characteristics
+        <textarea name="description" rows="4" maxlength="2000"
+          placeholder="Who is this person? Habits, fears, loves, history, how they speak..."></textarea>
+      </label>
+      <fieldset class="traits">
+        <legend>Temperament (0-10)</legend>
+        <div id="trait-sliders"></div>
+      </fieldset>
+      <label><span class="cap">People in their life <span class="hint">one per line: Name | role | note</span></span>
+        <textarea name="npcs" rows="3" placeholder="Mara | sister | worries about them&#10;Tomas | coworker"></textarea>
+      </label>
+      <fieldset class="traits">
+        <legend>The demi-god</legend>
+        <div class="row">
+          <label class="grow">Mood
+            <select name="mood" id="create-mood"></select>
+          </label>
+          <label class="grow" id="create-mood-custom-wrap" hidden>Custom mood
+            <input id="create-mood-custom" maxlength="80" placeholder="e.g. wistful but strict">
+          </label>
+        </div>
+        <label><span class="cap">Objectives <span class="hint">one per line; long-range aims it steers toward</span></span>
+          <textarea name="objectives" rows="3" placeholder="Help them find real friendship&#10;Test their patience"></textarea>
+        </label>
+        <div class="row">
+          <label class="grow">Backend
+            <select name="provider" id="create-provider"></select>
+          </label>
+          <label class="narrow">Seed <input name="seed" type="number" min="0" placeholder="random"></label>
+        </div>
+        <p id="provider-note" class="hint"></p>
+      </fieldset>
+      <div class="row end">
+        <span id="create-error" class="error"></span>
+        <button class="btn primary" type="submit">Breathe life into them</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Lives</h2>
+    <ul id="lives" class="lives"></ul>
+    <p id="lives-empty" class="hint">No lives yet. Begin one.</p>
+  </section>
+</main>
+
+<!-- ============================== LIFE: live view ============================== -->
+<main id="life" class="life" hidden>
+  <section class="col-left">
+    <div class="panel scene-panel">
+      <h2>Town <span id="where" class="dim"></span></h2>
+      <pre id="scene" class="scene" aria-label="ASCII map of the town"></pre>
+      <div id="legend" class="legend"></div>
+    </div>
+
+    <div class="panel">
+      <h2>The person</h2>
+      <div id="person-head" class="person-head"></div>
+      <div id="activity" class="activity"></div>
+      <div id="thought" class="thought"></div>
+      <div id="needs" class="needs"></div>
+      <details id="summary-box" class="summary" hidden>
+        <summary>Life so far</summary>
+        <p id="summary"></p>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>People</h2>
+      <ul id="people" class="people"></ul>
+    </div>
+  </section>
+
+  <section class="col-right">
+    <div class="panel log-panel">
+      <h2>Chronicle <button id="jump" class="link" hidden>jump to latest</button></h2>
+      <div id="log" class="log" tabindex="0" aria-live="polite"></div>
+    </div>
+
+    <div class="panel god-panel">
+      <h2>God <span class="dim">speak to the demi-god</span></h2>
+      <form id="god-form" class="form">
+        <textarea id="god-text" rows="2" maxlength="600" placeholder="e.g. A letter arrives from someone they have not heard from in years..."></textarea>
+        <div class="row">
+          <div class="seg" role="radiogroup" aria-label="Kind of word">
+            <label><input type="radio" name="kind" value="event" checked><span>event: it happens</span></label>
+            <label><input type="radio" name="kind" value="nudge"><span>nudge: a thought in their mind</span></label>
+          </div>
+          <button class="btn primary" type="submit" id="god-send">Speak</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Demi-god <span id="dg-source" class="dim"></span></h2>
+      <div class="form">
+        <div class="row">
+          <label class="grow">Mood
+            <select id="dg-mood"></select>
+          </label>
+          <label class="grow" id="dg-mood-custom-wrap" hidden>Custom
+            <input id="dg-mood-custom" maxlength="80">
+          </label>
+        </div>
+        <label><span class="cap">Objectives <span class="hint">one per line</span></span>
+          <textarea id="dg-objectives" rows="3"></textarea>
+        </label>
+        <div class="row end"><button id="dg-apply" class="btn">Apply mood and objectives</button></div>
+        <hr>
+        <div class="row">
+          <label class="grow">Backend <select id="dg-provider"></select></label>
+          <label class="grow">Model <input id="dg-model" maxlength="120" placeholder="default"></label>
+          <button id="dg-llm" class="btn">Switch</button>
+        </div>
+        <p id="dg-warn" class="warn" hidden></p>
+      </div>
+    </div>
+
+    <div class="panel foot">
+      <a id="export" class="link" href="#" download>export life (JSON)</a>
+      <button id="delete" class="link danger">delete this life</button>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>
