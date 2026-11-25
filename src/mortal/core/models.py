@@ -7,7 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from mortal.core.constants import DAWN_MINUTE, PLACE_KEYS
+from mortal.core.constants import DAWN_MINUTE
+from mortal.core.world import SIZES, World, builtin_world
 
 MAX_LOG = 1000
 MAX_MEMORIES = 200
@@ -15,7 +16,7 @@ MAX_NPCS = 12
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
-    return lo if value < lo else hi if value > hi else value
+    return lo if value < lo else min(value, hi)
 
 
 class Traits(BaseModel):
@@ -54,6 +55,13 @@ class Needs(BaseModel):
         self.money = _clamp(self.money, -10_000.0, 1_000_000.0)
 
 
+class RoutineStop(BaseModel):
+    """From `minute` (of the day, 0-1439) the townsperson is at `place`; None = away or asleep."""
+
+    minute: int = Field(ge=0, lt=1440)
+    place: str | None = None
+
+
 class Npc(BaseModel):
     id: str
     name: str = Field(min_length=1, max_length=60)
@@ -64,6 +72,8 @@ class Npc(BaseModel):
     glyph: str = "?"
     haunts: list[str] = Field(default_factory=list)
     last_met_t: int = -100_000
+    doing: str = Field("", max_length=120)  # what they are up to, as the demi-god last described it
+    routine: list[RoutineStop] = Field(default_factory=list)  # empty = wander between haunts
 
 
 class PlanItem(BaseModel):
@@ -99,7 +109,7 @@ class LLMChoice(BaseModel):
 
 
 class PendingDivine(BaseModel):
-    kind: Literal["event", "nudge"]
+    kind: Literal["event", "nudge", "world"]
     text: str = Field(min_length=1, max_length=600)
 
 
@@ -119,6 +129,8 @@ class LifeState(BaseModel):
     activity: str = ""
     thought: str = ""
     weather: str = "sunny"
+    season: str = ""
+    world: World = Field(default_factory=builtin_world)
     plan: list[PlanItem] = Field(default_factory=list)
     summary: str = ""
     memories: list[Memory] = Field(default_factory=list)
@@ -161,20 +173,28 @@ class LifeState(BaseModel):
         return None
 
 
-def valid_place(key: str | None) -> bool:
-    return key in PLACE_KEYS
-
-
 class NpcSpec(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     role: str = Field("acquaintance", max_length=60)
     note: str = Field("", max_length=300)
 
 
+class WorldSpec(BaseModel):
+    """What god says about the world the person is born into. Blank = the demi-god invents one."""
+
+    description: str = Field("", max_length=2000)
+    size: Literal["small", "medium", "large"] = "medium"
+
+    @property
+    def dimensions(self) -> tuple[int, int]:
+        return SIZES[self.size]
+
+
 class LifeSpec(BaseModel):
     """What god provides to start a life."""
 
     person: Person
+    world: WorldSpec = Field(default_factory=WorldSpec)
     npcs: list[NpcSpec] = Field(default_factory=list, max_length=8)
     god: GodSettings = Field(default_factory=GodSettings)
     llm: LLMChoice = Field(default_factory=LLMChoice)

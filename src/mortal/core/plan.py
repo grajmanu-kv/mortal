@@ -15,18 +15,21 @@ from __future__ import annotations
 from mortal.core.clock import day_start, parse_clock
 from mortal.core.constants import DAY_MINUTES, INTERRUPT_DURATION, KINDS, TICK_MINUTES
 from mortal.core.decision import PlanEntry
-from mortal.core.models import PlanItem, valid_place
+from mortal.core.models import PlanItem
+from mortal.core.world import World
 
 
-def resolve_entries(entries: list[PlanEntry], now: int) -> list[PlanItem]:
-    """Validate and convert entries to absolute-time items inside the current story day."""
+def resolve_entries(entries: list[PlanEntry], now: int, world: World) -> list[PlanItem]:
+    """Validate and convert entries to absolute-time items inside the current story day.
+
+    Places are resolved against `world` (a key, or a name an LLM wrote instead); unknown ones are dropped."""
     horizon = day_start(now) + DAY_MINUTES
     items: list[PlanItem] = []
     for entry in entries:
         when = parse_clock(entry.at, now)
         kind = entry.kind.strip().lower()
-        place = entry.place.strip().lower()
-        if when is None or kind not in KINDS or not valid_place(place):
+        place = world.lookup(entry.place)
+        if when is None or kind not in KINDS or place is None:
             continue
         when = max(when, now)  # the past collapses to "now"
         if when >= horizon:

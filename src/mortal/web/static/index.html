@@ -14,6 +14,7 @@
   <div id="bar-life" class="bar-life" hidden>
     <span id="clock" class="chip">Day 1 06:00</span>
     <span id="weather" class="chip dim"></span>
+    <span id="season" class="chip dim" hidden></span>
     <span id="thinking" class="chip think" hidden></span>
   </div>
   <div id="bar-controls" class="bar-controls" hidden>
@@ -39,6 +40,19 @@
         <label class="grow">Occupation<input name="occupation" maxlength="80" placeholder="clerk (leave empty for none)"></label>
         <label class="narrow">Wage / hour<input name="wage" type="number" min="0" max="1000" step="0.5" value="12"></label>
       </div>
+      <fieldset class="traits">
+        <legend>The world</legend>
+        <label><span class="cap">Describe it <span class="hint">the demi-god draws it in ASCII; leave empty for the built-in town</span></span>
+          <textarea name="world" rows="3" maxlength="2000"
+            placeholder="A windswept harbour village under a lighthouse; cobbled lanes, a market quay, an inn, tidal flats..."></textarea>
+        </label>
+        <div class="row">
+          <label class="narrow">Size
+            <select name="world-size" id="create-world-size"></select>
+          </label>
+          <p class="hint grow">It is validated (reachable places, somewhere to sleep and eat) and redrawn if flawed. It then keeps changing: weather, seasons, buildings, townsfolk.</p>
+        </div>
+      </fieldset>
       <label>Characteristics
         <textarea name="description" rows="4" maxlength="2000"
           placeholder="Who is this person? Habits, fears, loves, history, how they speak..."></textarea>
@@ -89,8 +103,8 @@
 <main id="life" class="life" hidden>
   <section class="col-left">
     <div class="panel scene-panel">
-      <h2>Town <span id="where" class="dim"></span></h2>
-      <pre id="scene" class="scene" aria-label="ASCII map of the town"></pre>
+      <h2><span id="world-name">World</span> <span id="where" class="dim"></span><span id="world-source" class="dim right"></span></h2>
+      <pre id="scene" class="scene" aria-label="ASCII map of the world"></pre>
       <div id="legend" class="legend"></div>
     </div>
 
@@ -126,6 +140,7 @@
           <div class="seg" role="radiogroup" aria-label="Kind of word">
             <label><input type="radio" name="kind" value="event" checked><span>event: it happens</span></label>
             <label><input type="radio" name="kind" value="nudge"><span>nudge: a thought in their mind</span></label>
+            <label><input type="radio" name="kind" value="world"><span>world: reshape the land, weather, town</span></label>
           </div>
           <button class="btn primary" type="submit" id="god-send">Speak</button>
         </div>

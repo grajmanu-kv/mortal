@@ -9,6 +9,7 @@ or lose log lines (each viewer keeps its own cursor into the log).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 from mortal.config import Settings
@@ -145,10 +146,8 @@ class LifeRunner:
         task, self._task = self._task, None
         if task is not None and not task.done():
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                pass
         self.checkpoint()
 
     # ------------------------------------------------------------------ the loop
@@ -161,7 +160,7 @@ class LifeRunner:
                 await asyncio.sleep(1.0 / self.speed)
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001 - surface the crash to viewers instead of dying silently
+        except Exception:
             log.exception("life %s crashed", self.state.id)
             self.state.add_log("system", "The simulation hit an internal error and paused. Check the server log.")
         finally:

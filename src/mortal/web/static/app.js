@@ -1,6 +1,7 @@
 "use strict";
 /* Mortal web UI: vanilla JS, no build step. All dynamic text goes through textContent;
-   the only innerHTML is the ASCII scene, whose characters are escaped. */
+   the only innerHTML is the ASCII scene, whose characters are escaped.
+   The map is data: each frame carries the terrain rows, a glyph->style table and the entities standing on it. */
 
 const $ = (id) => document.getElementById(id);
 const TRAITS = [
@@ -11,10 +12,16 @@ const TRAITS = [
 const NEED_ROWS = [
   ["energy", false], ["hunger", true], ["social", false], ["fun", false], ["health", false], ["mood", false],
 ];
-const WEATHER_ICON = { sunny: "(o)", cloudy: "(~)", rain: "(//)", fog: "(==)", storm: "(!!)" };
+/* Weather is free text written by the demi-god; pick an icon by keyword. */
+const WEATHER_ICONS = [
+  [/storm|thunder|gale|tempest|hurricane/, "(!!)"], [/snow|blizzard|sleet|frost|ice|hail/, "(**)"],
+  [/rain|drizzle|shower|downpour|monsoon/, "(//)"], [/fog|mist|haze|smog/, "(==)"],
+  [/dust|sand|ash|smoke/, "(::)"], [/cloud|overcast|grey|gray/, "(~)"], [/sun|clear|fair|bright|warm|hot/, "(o)"],
+];
+const weatherIcon = (w) => { const s = String(w || "").toLowerCase(); const hit = WEATHER_ICONS.find(([re]) => re.test(s)); return hit ? hit[1] : "(?)"; };
 const CUSTOM = "__custom__";
 
-const app = { meta: null, lifeId: null, source: null, lastSeq: 0, lastScene: "", godKey: "", llmKey: "", running: false, alive: true };
+const app = { meta: null, lifeId: null, source: null, lastSeq: 0, lastScene: "", lastLegend: "", godKey: "", llmKey: "", running: false, alive: true };
 
 /* ---------------------------------------------------------------- helpers */
 async function api(method, path, body) {
@@ -102,6 +109,7 @@ function initCreateForm() {
     sliders.append(row);
   }
   wireMood($("create-mood"), $("create-mood-custom-wrap"), $("create-mood-custom"));
+  fillSelect($("create-world-size"), Object.entries(app.meta.world_sizes).map(([k, d]) => [k, `${k} (${d.width}x${d.height})`]), "medium");
   const prov = $("create-provider");
   fillSelect(prov, providerOptions(), "auto");
   const note = () => {
@@ -123,12 +131,19 @@ function initCreateForm() {
     const spec = {
       person: { name: v("name").trim(), age: Number(v("age")) || 0, occupation: v("occupation").trim(), description: v("description").trim(), traits, wage_per_hour: Number(v("wage")) || 0 },
       npcs, god: { mood: readMood($("create-mood"), $("create-mood-custom")), objectives: lines(v("objectives")) },
+      world: { description: v("world").trim(), size: v("world-size") },
       llm: { provider: v("provider") }, seed: v("seed") === "" ? null : Number(v("seed")),
     };
+    const submit = f.querySelector("button[type=submit]"), label = submit.textContent;
+    const drawing = spec.world.description !== "";
+    submit.disabled = true;
+    submit.textContent = drawing ? "the demi-god is drawing the world..." : "breathing life...";
+    $("create-error").textContent = drawing ? "Drawing a world can take a minute or two; it is checked and, if need be, redrawn." : "";
     try {
       const life = await api("POST", "/api/lives", spec);
       location.hash = `#/life/${life.id}`;
     } catch (e) { $("create-error").textContent = e.message; }
+    finally { submit.disabled = false; submit.textContent = label; }
   });
 }
 
@@ -136,7 +151,7 @@ function initCreateForm() {
 async function showLife(id) {
   if (app.lifeId === id && app.source) return;
   closeStream();
-  app.lifeId = id; app.lastSeq = 0; app.lastScene = ""; app.godKey = ""; app.llmKey = "";
+  app.lifeId = id; app.lastSeq = 0; app.lastScene = ""; app.lastLegend = ""; app.godKey = ""; app.llmKey = "";
   $("log").replaceChildren();
   setChrome({ life: true });
   $("export").href = `/api/lives/${id}/export`;
@@ -150,22 +165,30 @@ async function showLife(id) {
 function closeStream() { if (app.source) { app.source.close(); app.source = null; } app.lifeId = null; }
 function setConn(text, cls) { const c = $("conn"); c.textContent = text; c.className = "chip dim conn " + cls; }
 
-function sceneClass(ch) {
-  if (ch === "@") return "me"; if (ch === "X") return "dead";
-  if (ch >= "a" && ch <= "z") return "npc"; if (ch >= "A" && ch <= "Z") return "label";
-  switch (ch) {
-    case "~": return "water"; case "*": return "tree"; case '"': return "grass"; case ",": return "grass2";
-    case ".": return "road"; case "=": return "door"; case "+": case "-": case "|": return "wall"; default: return "";
-  }
+const ENTITY_CLASS = { me: "me", npc: "npc", dead: "dead" };
+/* Glyph -> CSS class from the style table the server sends (water, wall, path, marker, ...). */
+function cellClass(ch, styles) {
+  const style = styles[ch];
+  if (style) return "s-" + style;
+  if (ch === " ") return "";
+  return /[A-Z0-9]/.test(ch) ? "s-lettering" : "s-other";
 }
-function sceneHtml(rows) {
+function sceneHtml(f) {
+  const grid = f.terrain.map((row) => Array.from(row));
+  const over = new Map();
+  for (const e of f.entities) over.set(e.y * 4096 + e.x, e);   // later entities (the person) win
   let out = "";
-  for (const row of rows) {
+  f.terrain.forEach((row, y) => {
     let cur = null, buf = "";
     const flush = () => { if (buf) out += cur ? `<span class="${cur}">${buf}</span>` : buf; buf = ""; };
-    for (const ch of row) { const c = sceneClass(ch); if (c !== cur) { flush(); cur = c; } buf += esc(ch); }
+    grid[y].forEach((ch, x) => {
+      const e = over.get(y * 4096 + x);
+      const c = e ? ENTITY_CLASS[e.kind] : cellClass(ch, f.styles);
+      if (c !== cur) { flush(); cur = c; }
+      buf += esc(e ? e.ch : ch);
+    });
     flush(); out += "\n";
-  }
+  });
   return out;
 }
 
@@ -173,13 +196,19 @@ function render(f) {
   app.alive = f.person.alive;
   document.body.dataset.phase = f.clock.phase;
   $("clock").textContent = `Day ${f.clock.day} · ${f.clock.weekday} ${f.clock.time}`;
-  $("weather").textContent = `${WEATHER_ICON[f.clock.weather] || ""} ${f.clock.weather}`;
+  $("weather").textContent = `${weatherIcon(f.clock.weather)} ${f.clock.weather}`;
+  const season = $("season");
+  season.hidden = !f.clock.season;
+  season.textContent = f.clock.season || "";
+  $("world-name").textContent = f.world.name;
+  $("world-name").title = f.world.description || "";
+  $("world-source").textContent = f.world.source === "llm" ? `drawn by the demi-god${f.world.revision ? ` · changed ${f.world.revision}x` : ""}` : "built-in town";
   const th = $("thinking");
   th.hidden = !f.runtime.thinking;
   th.textContent = f.runtime.thinking ? `the demi-god contemplates (${f.runtime.thinking})` : "";
 
-  const key = f.scene.join("\n");
-  if (key !== app.lastScene) { app.lastScene = key; $("scene").innerHTML = sceneHtml(f.scene); }
+  const key = JSON.stringify([f.terrain, f.entities, f.styles]);
+  if (key !== app.lastScene) { app.lastScene = key; $("scene").innerHTML = sceneHtml(f); }
   $("where").textContent = `· ${f.person.location}`;
   renderLegend(f);
   renderPerson(f);
@@ -190,12 +219,15 @@ function render(f) {
 }
 
 function renderLegend(f) {
+  const key = JSON.stringify([f.legend, f.people.map((p) => [p.glyph, p.name]), f.person.name]);
+  if (key === app.lastLegend) return;
+  app.lastLegend = key;
   const lg = $("legend");
   lg.replaceChildren();
   const add = (cls, glyph, text) => { const s = el("span", cls); s.append(el("b", "", glyph), " " + text); lg.append(s); };
-  add("", "@", f.person.name);
+  add("me", "@", f.person.name);
   for (const p of f.people) add("npc", p.glyph, p.name);
-  add("", "=", "door"); add("", "~", "river");
+  for (const item of f.legend) add("s-" + item.style, item.chars, item.name);
 }
 
 function renderPerson(f) {
@@ -227,6 +259,7 @@ function renderPeople(people) {
     const where = el("span", "where", p.where + " ");
     where.append(aff);
     const name = el("span", "", `${p.name} `); name.append(el("span", "dim", `(${p.role})`));
+    if (p.doing) name.append(el("div", "doing", p.doing));
     li.append(el("span", "glyph", p.glyph), name, where);
     ul.append(li);
   }

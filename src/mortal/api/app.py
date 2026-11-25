@@ -16,8 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from mortal import __version__
 from mortal.api.schemas import DemigodUpdate, GodMessage, SpeedUpdate
 from mortal.config import Settings
-from mortal.core.constants import KINDS, MOOD_PRESETS, PLACE_KEYS, PLACE_LABELS
+from mortal.core.constants import DIVINE_KINDS, KINDS, MOOD_PRESETS
 from mortal.core.models import LifeSpec, LLMChoice
+from mortal.core.world import SIZES
 from mortal.engine.registry import LifeRegistry
 from mortal.errors import NotFoundError
 from mortal.llm.factory import available_providers
@@ -54,8 +55,9 @@ def create_app(settings: Settings | None = None, *, persist: bool = True) -> Fas
     @app.get("/api/meta")
     async def meta() -> dict:
         return {
-            "places": [{"key": k, "label": PLACE_LABELS[k]} for k in PLACE_KEYS],
             "kinds": list(KINDS),
+            "divine_kinds": list(DIVINE_KINDS),
+            "world_sizes": {name: {"width": w, "height": h} for name, (w, h) in SIZES.items()},
             "moods": list(MOOD_PRESETS),
             "providers": available_providers(settings),
             "speeds": [0.5, 1, 2, 5, 10, 30],
@@ -68,7 +70,7 @@ def create_app(settings: Settings | None = None, *, persist: bool = True) -> Fas
 
     @app.post("/api/lives", status_code=201)
     async def create_life(spec: LifeSpec) -> dict:
-        runner = registry.create(spec)
+        runner = await registry.create(spec)
         return runner.summary()
 
     @app.get("/api/lives/{life_id}")

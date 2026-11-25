@@ -8,6 +8,7 @@ from mortal.engine.demigod import DemigodService
 from mortal.engine.factory import new_life_state
 from mortal.engine.runner import LifeRunner
 from mortal.engine.store import LifeStore
+from mortal.engine.worldgen import build_world
 from mortal.errors import NotFoundError
 
 
@@ -26,8 +27,13 @@ class LifeRegistry:
             self._runners[state.id] = LifeRunner(state, self.demigod, self.settings, self.store)
         return len(self._runners)
 
-    def create(self, spec: LifeSpec) -> LifeRunner:
-        state = new_life_state(spec)
+    async def create(self, spec: LifeSpec) -> LifeRunner:
+        """Begin a life. The demi-god first draws the world (an LLM call that can take a while)."""
+        provider = self.demigod.provider_for(spec.llm, long_reply=True)
+        result = await build_world(provider, spec, self.settings)
+        state = new_life_state(spec, result.world)
+        for note in result.notes:
+            state.add_log("system", note)
         runner = LifeRunner(state, self.demigod, self.settings, self.store)
         self._runners[state.id] = runner
         runner.checkpoint()

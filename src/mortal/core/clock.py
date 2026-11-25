@@ -81,3 +81,12 @@ def parse_clock(text: str, now: int) -> int | None:
     m = hours * 60 + minutes
     start = day_start(now)
     return start + (m - DAWN_MINUTE if m >= DAWN_MINUTE else m + DAY_MINUTES - DAWN_MINUTE)
+
+
+def parse_minute_of_day(text: str) -> int | None:
+    """"HH:MM" -> minute of the calendar day (0-1439), or None. Used for repeating daily routines."""
+    match = _HHMM.match(text.strip().lower())
+    if not match:
+        return None
+    hours, minutes = int(match.group(1)), int(match.group(2))
+    return hours * 60 + minutes if hours <= 23 and minutes <= 59 else None

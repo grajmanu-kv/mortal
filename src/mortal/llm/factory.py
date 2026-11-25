@@ -31,14 +31,16 @@ def resolve_provider_id(choice_provider: str, settings: Settings) -> str:
     return "stub"
 
 
-def make_provider(provider_id: str, model: str | None, settings: Settings) -> Provider | None:
+def make_provider(provider_id: str, model: str | None, settings: Settings, *, long_reply: bool = False) -> Provider | None:
+    """`long_reply` asks for the generous timeout and token budget that drawing a map needs."""
     pid = resolve_provider_id(provider_id, settings)
+    timeout = settings.world_timeout if long_reply else settings.llm_timeout
     if pid == "stub":
         return None
     if pid == "gemini":
         return GeminiProvider(settings.gemini_api_key or "", model or settings.gemini_model,
-                              settings.llm_timeout, base_url=settings.gemini_base_url)
+                              timeout, base_url=settings.gemini_base_url, max_tokens=16384 if long_reply else 4096)
     if pid == "openai":
         return OpenAICompatProvider(settings.openai_base_url, model or settings.openai_model,
-                                    settings.openai_api_key, settings.llm_timeout)
+                                    settings.openai_api_key, timeout, max_tokens=8192 if long_reply else None)
     raise LLMError(f"unknown provider {provider_id!r}")

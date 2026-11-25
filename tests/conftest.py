@@ -3,7 +3,14 @@ from __future__ import annotations
 import pytest
 
 from mortal.config import Settings
-from mortal.core.models import GodSettings, LifeSpec, LifeState, LLMChoice, Person, Traits
+from mortal.core.models import (
+    GodSettings,
+    LifeSpec,
+    LifeState,
+    LLMChoice,
+    Person,
+    Traits,
+)
 from mortal.engine.demigod import DemigodService
 from mortal.engine.factory import new_life_state
 from mortal.engine.life import LifeEngine
@@ -17,14 +24,14 @@ def settings(tmp_path) -> Settings:
 @pytest.fixture
 def make_state():
     def factory(*, name="Ayo", occupation="clerk", mood="benevolent", objectives=(), seed=1,
-                provider="stub", traits=None, wage=12.0, description="") -> LifeState:
+                provider="stub", traits=None, wage=12.0, description="", world=None) -> LifeState:
         spec = LifeSpec(
             person=Person(name=name, age=34, occupation=occupation, description=description,
                           traits=traits or Traits(), wage_per_hour=wage),
             god=GodSettings(mood=mood, objectives=list(objectives)),
             llm=LLMChoice(provider=provider), seed=seed,
         )
-        return new_life_state(spec)
+        return new_life_state(spec, world)
 
     return factory
 

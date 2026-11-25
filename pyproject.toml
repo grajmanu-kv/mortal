@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mortal"
-version = "0.1.0"
+version = "0.2.0"
 description = "A life simulator: a person lives in a tiny ASCII town while a mood-driven demi-god (an LLM) makes his decisions and a user (god) steers the demi-god."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -48,7 +48,8 @@ def wait_for(predicate, timeout=5.0):
 def test_health_and_meta(client):
     assert client.get("/api/health").json()["status"] == "ok"
     meta = client.get("/api/meta").json()
-    assert "home" in [p["key"] for p in meta["places"]] and meta["providers"][0]["id"] == "stub"
+    assert meta["providers"][0]["id"] == "stub" and "world" in meta["divine_kinds"]
+    assert meta["world_sizes"]["medium"] == {"width": 56, "height": 20}
     assert "benevolent" in meta["moods"]
 
 
@@ -64,7 +65,12 @@ def test_create_and_describe_a_life(client):
     assert frame["person"]["name"] == "Ayo" and frame["person"]["alive"]
     assert frame["god"] == {"mood": "mischievous", "objectives": ["find real friendship"]}
     assert [p["name"] for p in frame["people"]] == ["Mara"]
-    assert sum(row.count("@") for row in frame["scene"]) == 1
+    me = [e for e in frame["entities"] if e["kind"] == "me"]
+    assert len(me) == 1 and frame["terrain"][me[0]["y"]][me[0]["x"]] != " "  # the person stands on the map
+    assert frame["world"]["name"] == "the town" and frame["world"]["source"] == "builtin"
+    assert {e["kind"] for e in frame["entities"]} <= {"me", "npc", "dead"}
+    assert len({len(r) for r in frame["terrain"]}) == 1 and "." in frame["styles"]
+    assert any(item["name"] == "river" and item["style"] == "water" for item in frame["legend"])
     assert frame["runtime"]["running"] is False and frame["runtime"]["provider"] == "offline"
     assert [x["id"] for x in client.get("/api/lives").json()] == [life_id]
 
@@ -175,7 +181,8 @@ def test_lives_survive_a_restart(settings):
         before = c.get(f"/api/lives/{life_id}").json()
     with TestClient(create_app(settings)) as c:
         after = c.get(f"/api/lives/{life_id}").json()
-        assert after["clock"] == before["clock"] and after["scene"] == before["scene"]
+        assert after["clock"] == before["clock"] and after["entities"] == before["entities"]
+        assert after["terrain"] == before["terrain"] and after["world"] == before["world"]
         assert after["person"]["needs"] == before["person"]["needs"]
         assert after["god"] == {"mood": "melancholic", "objectives": ["be still"]}
         assert after["runtime"]["running"] is False
@@ -197,12 +204,12 @@ def test_store_skips_corrupt_files(tmp_path):
 
 
 # ----------------------------------------------------------------------------- live stream
-def test_subscriber_cursor_delivers_each_log_line_exactly_once(settings):
-    from mortal.engine.registry import LifeRegistry
+async def test_subscriber_cursor_delivers_each_log_line_exactly_once(settings):
     from mortal.core.models import LifeSpec
+    from mortal.engine.registry import LifeRegistry
 
     registry = LifeRegistry(settings, persist=False)
-    runner = registry.create(LifeSpec.model_validate(BODY))
+    runner = await registry.create(LifeSpec.model_validate(BODY))
     assert runner.frame_for(runner.subscribe(history=0))["log"] == []  # no replay requested
     sub = runner.subscribe(history=10)
     first = runner.frame_for(sub)

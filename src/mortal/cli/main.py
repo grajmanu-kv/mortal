@@ -9,7 +9,7 @@ import os
 import sys
 
 from mortal.config import Settings
-from mortal.core.models import GodSettings, LifeSpec, LLMChoice, Person
+from mortal.core.models import GodSettings, LifeSpec, LLMChoice, Person, WorldSpec
 from mortal.engine.registry import LifeRegistry
 
 
@@ -31,11 +31,15 @@ async def _simulate(args: argparse.Namespace) -> int:
     registry = LifeRegistry(settings, persist=False)
     spec = LifeSpec(
         person=Person(name=args.name, age=args.age, occupation=args.occupation, description=args.description),
+        world=WorldSpec(description=args.world, size=args.world_size),
         god=GodSettings(mood=args.mood, objectives=args.objective),
         llm=LLMChoice(provider=args.provider),
         seed=args.seed,
     )
-    runner = registry.create(spec)
+    runner = await registry.create(spec)
+    print(f"World: {runner.state.world.name} ({runner.state.world.source})")
+    if args.map:
+        print("\n".join(runner.state.world.rows))
     for message in args.say:
         await runner.submit_divine("event", message)
     shown = 0
@@ -67,6 +71,9 @@ def main(argv: list[str] | None = None) -> int:
     sim.add_argument("--age", type=int, default=34)
     sim.add_argument("--occupation", default="clerk")
     sim.add_argument("--description", default="")
+    sim.add_argument("--world", default="", help="describe the world; the LLM demi-god draws it (offline: built-in town)")
+    sim.add_argument("--world-size", choices=["small", "medium", "large"], default="medium")
+    sim.add_argument("--map", action="store_true", help="print the world's ASCII map before the story")
     sim.add_argument("--mood", default="benevolent")
     sim.add_argument("--objective", action="append", default=[])
     sim.add_argument("--provider", choices=["auto", "stub", "gemini", "openai"], default="auto")

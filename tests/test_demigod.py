@@ -4,24 +4,29 @@ import json
 import random
 
 import pytest
+from conftest import run_ticks
 
 from mortal.config import Settings
 from mortal.core.decision import DecisionRequest
+from mortal.core.world import builtin_world
 from mortal.engine.demigod import BREAKER_COOLDOWN, DemigodService
 from mortal.engine.demigod_rule import RuleDemigod, mood_class
-from mortal.engine.prompts import SYSTEM_PROMPT
+from mortal.engine.prompts import system_prompt
 from mortal.errors import LLMError
-
-from conftest import run_ticks
 
 
 class FakeProvider:
     name, model = "fake", "fake-1"
 
-    def __init__(self, replies):
+    def __init__(self, replies, world_reply=None):
         self.replies, self.calls, self.prompts = list(replies), 0, []
+        self.world_reply, self.world_calls = world_reply or {"narration": ""}, 0
 
     def complete(self, system, user):
+        if "TRIGGER: world." in user:  # the daily world step is answered (and counted) separately
+            self.world_calls += 1
+            reply = self.world_reply
+            return reply if isinstance(reply, str) else json.dumps(reply)
         self.calls += 1
         self.prompts.append((system, user))
         reply = self.replies[min(self.calls - 1, len(self.replies) - 1)]
@@ -32,7 +37,8 @@ class FakeProvider:
 
 def service_with(provider, settings):
     svc = DemigodService(settings)
-    svc._providers[("gemini", None)] = provider  # pre-seed the per-choice provider cache
+    svc._providers[("gemini", None, False)] = provider  # pre-seed the per-choice provider cache
+    svc._providers[("gemini", None, True)] = provider
     return svc
 
 
@@ -105,7 +111,7 @@ def test_melancholy_avoids_company_in_the_evening(make_state):
     s = make_state(mood="melancholic", traits=__import__("mortal.core.models", fromlist=["Traits"]).Traits(extraversion=9))
     for seed in range(10):
         d = RuleDemigod().decide(DecisionRequest("dawn", s, random.Random(seed)))
-        evening = [e for e in d.plan if e.at == "17:30"][0]
+        evening = next(e for e in d.plan if e.at == "17:30")
         assert evening.place in {"river", "temple", "library", "park", "home"}
 
 
@@ -131,7 +137,10 @@ async def test_prompt_carries_mood_objectives_traits_and_gods_words(make_engine,
     divine_prompt = provider.prompts[-1][1]
     for needle in ("wistful but strict", "teach patience", "Collects old maps", "NUDGE", "Call your sister.", "extraversion"):
         assert needle in divine_prompt
-    assert "ONE JSON object" in SYSTEM_PROMPT and "home, work, cafe" in SYSTEM_PROMPT
+    system = system_prompt(builtin_world(), "dawn")
+    assert "ONE JSON object" in system and all(key in system for key in ("home", "work", "cafe", "river"))
+    assert 'Do not include a "world" key' in system  # only world-editing triggers may redraw the world
+    assert "patch" in system_prompt(builtin_world(), "divine") and "patch" in system_prompt(builtin_world(), "world")
 
 
 async def test_unusable_replies_fall_back_to_the_rule_demigod(make_engine, make_state, settings):

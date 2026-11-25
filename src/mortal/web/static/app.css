@@ -104,17 +104,28 @@ hr { border: 0; border-top: 1px solid var(--line); width: 100%; margin: 2px 0; }
 .scene .me { color: #fff6d8; background: #6b4d17; font-weight: 700; border-radius: 2px; box-shadow: 0 0 8px #e3a857aa; }
 .scene .dead { color: var(--bad); font-weight: 700; }
 .scene .npc { color: var(--demi); font-weight: 700; }
-.scene .water { color: var(--water); }
-.scene .tree { color: #3f7d45; }
-.scene .grass { color: #2b4a31; }
-.scene .grass2 { color: #26382a; }
-.scene .road { color: #6a6658; }
-.scene .wall { color: #8a6d46; }
-.scene .door { color: var(--ember); font-weight: 700; }
-.scene .label { color: #cdbf9a; }
+/* Terrain styles: the demi-god picks a style per glyph; the palette lives here. */
+.s-water { color: var(--water); }
+.s-foliage { color: #3f7d45; }
+.s-grass { color: #2b4a31; }
+.s-path { color: #6a6658; }
+.s-floor { color: #5d5444; }
+.s-wall { color: #8a6d46; }
+.s-door { color: var(--ember); font-weight: 700; }
+.s-rock { color: #7b7f8c; }
+.s-sand { color: #b8a36a; }
+.s-snow { color: #dfe9f2; }
+.s-fire { color: #ff7a3d; font-weight: 700; }
+.s-void { color: #2a2d35; }
+.s-other { color: #9b9684; }
+.s-lettering { color: #cdbf9a; }
+.s-marker { color: var(--ember); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .legend { margin-top: 8px; color: var(--dim); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
-.legend b { color: var(--ink); }
+.legend span { color: var(--dim); }
+.legend b { font-weight: 700; }
+.legend .me b { color: #fff6d8; background: #6b4d17; padding: 0 2px; border-radius: 2px; }
 .legend .npc b { color: var(--demi); }
+.panel h2 .right { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 400; }
 
 .person-head { font-size: 16px; }
 .person-head small { color: var(--dim); font-size: 12px; margin-left: 8px; }
@@ -132,6 +143,7 @@ hr { border: 0; border-top: 1px solid var(--line); width: 100%; margin: 2px 0; }
 .people li { display: grid; grid-template-columns: 1.6em 1fr auto; gap: 8px; padding: 2px 0; }
 .people .glyph { color: var(--demi); font-weight: 700; }
 .people .where { color: var(--dim); }
+.people .doing { color: var(--dim); font-size: 12px; font-style: italic; }
 .people .aff-pos { color: var(--good); } .people .aff-neg { color: var(--bad); }
 
 /* ---------- chronicle ---------- */

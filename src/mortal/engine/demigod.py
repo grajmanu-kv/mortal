@@ -13,7 +13,7 @@ import logging
 
 from mortal.config import Settings
 from mortal.core.decision import Decision, DecisionRequest, parse_decision
-from mortal.core.models import LifeState
+from mortal.core.models import LifeState, LLMChoice
 from mortal.engine.demigod_rule import RuleDemigod
 from mortal.engine.prompts import build_prompts
 from mortal.errors import LLMError
@@ -31,17 +31,22 @@ class DemigodService:
     def __init__(self, settings: Settings, rule: RuleDemigod | None = None):
         self._settings = settings
         self.rule = rule or RuleDemigod()
-        self._providers: dict[tuple[str, str | None], Provider | None] = {}
+        self._providers: dict[tuple[str, str | None, bool], Provider | None] = {}
 
-    def _provider_for(self, s: LifeState) -> Provider | None:
-        key = (s.llm.provider, s.llm.model)
+    def provider_for(self, choice: LLMChoice, *, long_reply: bool = False) -> Provider | None:
+        """The provider a life's backend choice resolves to (None = offline). `long_reply` is for map drawing."""
+        key = (choice.provider, choice.model, long_reply)
         if key not in self._providers:
             try:
-                self._providers[key] = make_provider(s.llm.provider, s.llm.model, self._settings)
+                self._providers[key] = make_provider(choice.provider, choice.model, self._settings,
+                                                     long_reply=long_reply)
             except LLMError as exc:
                 log.warning("provider unavailable: %s", exc)
                 self._providers[key] = None
         return self._providers[key]
+
+    def _provider_for(self, s: LifeState) -> Provider | None:
+        return self.provider_for(s.llm)
 
     def provider_label(self, s: LifeState) -> str:
         pid = resolve_provider_id(s.llm.provider, self._settings)

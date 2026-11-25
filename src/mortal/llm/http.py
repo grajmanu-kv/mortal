@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import urllib.error
 import urllib.request
@@ -18,14 +19,12 @@ def post_json(url: str, payload: dict[str, Any], headers: dict[str, str], timeou
         headers={"Content-Type": "application/json", "Accept": "application/json", **headers},
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - scheme checked by caller
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read()
     except urllib.error.HTTPError as exc:
         detail = ""
-        try:
+        with contextlib.suppress(Exception):
             detail = exc.read().decode("utf-8", "replace")[:300]
-        except Exception:  # noqa: BLE001
-            pass
         raise LLMError(f"HTTP {exc.code} from model endpoint: {detail}".strip()) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise LLMError(f"model endpoint unreachable: {getattr(exc, 'reason', exc)}") from exc

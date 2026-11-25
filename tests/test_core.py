@@ -2,19 +2,27 @@ from __future__ import annotations
 
 import pytest
 
-from mortal.core.clock import hhmm, is_dawn, is_weekend, parse_clock, phase, story_day, weekday
-from mortal.core.constants import DAWN_MINUTE, PLACE_KEYS
+from mortal.core.clock import (
+    hhmm,
+    is_dawn,
+    is_weekend,
+    parse_clock,
+    phase,
+    story_day,
+    weekday,
+)
+from mortal.core.constants import DAWN_MINUTE
 from mortal.core.decision import Decision, PlanEntry, parse_decision
 from mortal.core.models import LifeState, Needs, PlanItem
 from mortal.core.plan import current_item, merge_plan, resolve_entries
-from mortal.core.townmap import get_town
+from mortal.core.world import builtin_world
 
 
 # ----------------------------------------------------------------------------- map
 def test_every_place_is_reachable_from_home():
-    town = get_town()
+    town = builtin_world()
     home = town.anchor("home")
-    for key in PLACE_KEYS:
+    for key in town.places:
         anchor = town.anchor(key)
         assert town.walkable(anchor), key
         path = town.path(home, anchor)
@@ -22,14 +30,14 @@ def test_every_place_is_reachable_from_home():
 
 
 def test_map_is_rectangular_and_anchors_are_unique():
-    town = get_town()
+    town = builtin_world()
     assert len({len(r) for r in town.rows}) == 1
-    anchors = [town.anchor(k) for k in PLACE_KEYS]
+    anchors = [town.anchor(k) for k in town.places]
     assert len(set(anchors)) == len(anchors)
 
 
 def test_paths_only_use_walkable_cells_and_adjacent_steps():
-    town = get_town()
+    town = builtin_world()
     path = town.path(town.anchor("library"), town.anchor("park"))
     prev = town.anchor("library")
     for cell in path:
@@ -39,8 +47,8 @@ def test_paths_only_use_walkable_cells_and_adjacent_steps():
 
 
 def test_slots_start_at_anchor_and_are_walkable():
-    town = get_town()
-    for key in PLACE_KEYS:
+    town = builtin_world()
+    for key in town.places:
         slots = town.slots(key)
         assert slots[0] == town.anchor(key)
         assert all(town.walkable(c) for c in slots)
@@ -78,14 +86,14 @@ def entry(at, place="home", kind="relax", text=""):
 def test_resolve_drops_invalid_and_clamps_past_to_now():
     now = DAWN_MINUTE + 120
     items = resolve_entries([entry("06:00"), entry("09:00", "nowhere"), entry("10:00", kind="fly"),
-                             entry("garbage"), entry("12:00", "cafe", "eat")], now)
+                             entry("garbage"), entry("12:00", "cafe", "eat")], now, builtin_world())
     assert [(i.t, i.place) for i in items] == [(now, "home"), (12 * 60, "cafe")]
 
 
 def test_resolve_drops_entries_beyond_the_story_day():
-    items = resolve_entries([entry("05:00")], DAWN_MINUTE)  # 05:00 = the *next* morning, before dawn
+    items = resolve_entries([entry("05:00")], DAWN_MINUTE, builtin_world())  # 05:00 = the *next* morning, before dawn
     assert [i.t for i in items] == [1440 + 300]
-    assert resolve_entries([entry("06:00")], DAWN_MINUTE + 1440 - 10)[0].t == DAWN_MINUTE + 1440 - 10
+    assert resolve_entries([entry("06:00")], DAWN_MINUTE + 1440 - 10, builtin_world())[0].t == DAWN_MINUTE + 1440 - 10
 
 
 def test_current_item_is_last_started():

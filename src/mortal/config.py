@@ -38,8 +38,11 @@ class Settings:
     openai_api_key: str | None
     openai_model: str
     llm_timeout: float
+    world_timeout: float  # drawing or redrawing a map is a long reply: it gets a longer leash
     max_decisions_per_day: int
     fate_events_per_day: float
+    world_attempts: int  # tries at drawing a playable world before the built-in town is used
+    world_update_days: int  # the demi-god tends the world (weather, townsfolk, terrain) every N days
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -55,6 +58,9 @@ class Settings:
             openai_api_key=env.get("MORTAL_OPENAI_API_KEY") or None,
             openai_model=env.get("MORTAL_OPENAI_MODEL", "llama3.1"),
             llm_timeout=_float(env, "MORTAL_LLM_TIMEOUT", 30.0),
+            world_timeout=_float(env, "MORTAL_WORLD_TIMEOUT", 120.0),
             max_decisions_per_day=_int(env, "MORTAL_MAX_DECISIONS_PER_DAY", 8),
             fate_events_per_day=_float(env, "MORTAL_FATE_EVENTS_PER_DAY", 1.0),
+            world_attempts=max(1, _int(env, "MORTAL_WORLD_ATTEMPTS", 3)),
+            world_update_days=max(1, _int(env, "MORTAL_WORLD_UPDATE_DAYS", 1)),
         )

@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import ClassVar
 
 import pytest
 
@@ -26,7 +27,7 @@ DECISION = {
 
 
 class Handler(BaseHTTPRequestHandler):
-    seen: list[dict] = []
+    seen: ClassVar[list[dict]] = []
     mode = "ok"
 
     def log_message(self, *args):  # silence
@@ -122,5 +123,7 @@ async def test_a_life_driven_by_a_model_over_http(fake_server, make_state):
     assert state.last_source == "llm"
     assert [i.place for i in state.plan] == ["home", "library", "cafe", "home"]
     assert "A hush falls over the street." in [e.text for e in state.log]
-    user_prompt = handler.seen[0]["body"]["messages"][1]["content"]
+    prompts = [r["body"]["messages"][1]["content"] for r in handler.seen]
+    assert "TRIGGER: world." in prompts[0]  # the world is tended before the person's day is planned
+    user_prompt = prompts[1]
     assert "Mood: benevolent" in user_prompt and "TRIGGER: dawn" in user_prompt

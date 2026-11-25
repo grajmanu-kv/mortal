@@ -10,7 +10,7 @@ from mortal.core.models import GodSettings
 
 
 class GodMessage(BaseModel):
-    kind: Literal["event", "nudge"] = "event"
+    kind: Literal["event", "nudge", "world"] = "event"
     text: str = Field(min_length=1, max_length=600)
 
     @field_validator("text")

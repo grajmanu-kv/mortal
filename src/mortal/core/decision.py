@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from mortal.core.constants import TRIGGERS
 from mortal.core.models import LifeState
+from mortal.core.world import WorldPatch
 
 
 def _bounded(limit: float):
@@ -95,6 +96,39 @@ class Profile(BaseModel):
         return None if v is None else max(0.0, min(1000.0, float(v)))
 
 
+class RoutineEntry(BaseModel):
+    """From `at` ("HH:MM") a townsperson is at `place` (a place key, or null for away/asleep)."""
+
+    model_config = ConfigDict(extra="ignore")
+    at: str
+    place: str | None = None
+
+
+class NpcLife(BaseModel):
+    """What one townsperson does today. Replaces their routine; omitted people carry on as before."""
+
+    model_config = ConfigDict(extra="ignore")
+    name: str = Field(max_length=60)
+    doing: str = Field("", max_length=120)
+    routine: list[RoutineEntry] = Field(default_factory=list)
+
+
+class WorldUpdate(BaseModel):
+    """Everything that happens to the world itself (as opposed to the person): weather, terrain,
+    buildings, and the townsfolk's own lives."""
+
+    model_config = ConfigDict(extra="ignore")
+    weather: str | None = Field(None, max_length=40)
+    patch: WorldPatch | None = None
+    npcs: list[NpcLife] = Field(default_factory=list)
+    arrivals: list[NewNpc] = Field(default_factory=list)
+    departures: list[str] = Field(default_factory=list)
+
+    def is_empty(self) -> bool:
+        return not (self.weather or (self.patch and not self.patch.is_empty()) or self.npcs
+                    or self.arrivals or self.departures)
+
+
 class Decision(BaseModel):
     model_config = ConfigDict(extra="ignore")
     narration: str = Field("", max_length=600)
@@ -108,6 +142,7 @@ class Decision(BaseModel):
     profile: Profile | None = None
     summary: str | None = Field(None, max_length=1200)
     death: str | None = Field(None, max_length=200)
+    world: WorldUpdate | None = None
 
 
 _LIST_FIELDS: dict[str, type[BaseModel]] = {
@@ -119,10 +154,56 @@ _LIST_CAPS = {"relationships": 6, "new_npcs": 3, "plan": 14}
 _SCALAR_CAPS = {"narration": 600, "thought": 300, "comment": 300, "summary": 1200, "death": 200}
 
 
+def _parse_list(raw: Any, model: type[BaseModel], cap: int) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for item in raw[:cap] if isinstance(raw, list) else []:
+        try:
+            items.append(model.model_validate(item).model_dump())
+        except ValidationError:
+            continue
+    return items
+
+
+def _parse_npcs(raw: Any) -> list[dict[str, Any]]:
+    """Townsfolk lives, one bad stop never costing the whole person."""
+    out: list[dict[str, Any]] = []
+    for item in raw[:8] if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        routine = _parse_list(item.get("routine"), RoutineEntry, 12)
+        try:
+            out.append(NpcLife.model_validate({**item, "routine": routine}).model_dump())
+        except ValidationError:
+            continue
+    return out
+
+
+def _parse_world_update(raw: Any) -> dict[str, Any] | None:
+    """Keep every valid part of an untrusted world update; drop the rest."""
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, Any] = {}
+    weather = raw.get("weather")
+    if isinstance(weather, str) and weather.strip():
+        out["weather"] = weather.strip()[:40]
+    patch = raw.get("patch")
+    if isinstance(patch, dict):
+        try:
+            out["patch"] = WorldPatch.model_validate(patch).model_dump()
+        except ValidationError:
+            pass
+    out["npcs"] = _parse_npcs(raw.get("npcs"))
+    out["arrivals"] = _parse_list(raw.get("arrivals"), NewNpc, 2)
+    departures = raw.get("departures")
+    out["departures"] = [d.strip()[:60] for d in departures[:2] if isinstance(d, str) and d.strip()] \
+        if isinstance(departures, list) else []
+    return out
+
+
 def parse_decision(obj: Any) -> Decision:
     """Build a Decision from an untrusted JSON value, keeping whatever parts are valid."""
     if not isinstance(obj, dict):
-        raise ValueError("decision must be a JSON object")
+        raise ValueError("decision must be a JSON object")  # noqa: TRY004 - callers catch ValueError
     clean: dict[str, Any] = {}
     for key, cap in _SCALAR_CAPS.items():
         value = obj.get(key)
@@ -139,6 +220,9 @@ def parse_decision(obj: Any) -> Decision:
             except ValidationError:
                 continue
         clean[key] = items
+    update = _parse_world_update(obj.get("world"))
+    if update is not None:
+        clean["world"] = update
     for key, model in (("effects", Effects), ("life_event", LifeEvent), ("profile", Profile)):
         raw = obj.get(key)
         if isinstance(raw, dict):

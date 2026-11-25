@@ -10,7 +10,7 @@ class OpenAICompatProvider:
     name = "openai"
 
     def __init__(self, base_url: str, model: str, api_key: str | None = None,
-                 timeout: float = 30.0, temperature: float = 0.9):
+                 timeout: float = 30.0, temperature: float = 0.9, max_tokens: int | None = None):
         if not base_url.startswith(("http://", "https://")):
             raise LLMError("MORTAL_OPENAI_BASE_URL must start with http:// or https://")
         self._url = base_url.rstrip("/") + "/chat/completions"
@@ -18,6 +18,7 @@ class OpenAICompatProvider:
         self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._timeout = timeout
         self._temperature = temperature
+        self._max_tokens = max_tokens
 
     def complete(self, system: str, user: str) -> str:
         payload: dict = {
@@ -26,6 +27,8 @@ class OpenAICompatProvider:
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "response_format": {"type": "json_object"},
         }
+        if self._max_tokens:
+            payload["max_tokens"] = self._max_tokens
         try:
             data = post_json(self._url, payload, self._headers, self._timeout)
         except LLMError as exc:

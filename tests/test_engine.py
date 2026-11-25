@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import copy
 
+from conftest import run_ticks
+
 from mortal.core.clock import hhmm
 from mortal.core.constants import DAWN_MINUTE
 from mortal.core.models import PlanItem
-from mortal.core.townmap import get_town
+from mortal.core.world import builtin_world
 from mortal.engine.physics import apply_tick
 from mortal.engine.views import render_scene
-
-from conftest import run_ticks
 
 DAY = 144  # ticks
 
@@ -17,7 +17,7 @@ DAY = 144  # ticks
 async def test_a_week_passes_sanely(make_engine):
     engine = make_engine()
     s = engine.state
-    home = get_town().anchor("home")
+    home = builtin_world().anchor("home")
     slept_at_home = 0
     for _day in range(7):
         for tick in range(DAY):

@@ -11,7 +11,7 @@ class GeminiProvider:
     name = "gemini"
 
     def __init__(self, api_key: str, model: str, timeout: float = 30.0, temperature: float = 0.9,
-                 base_url: str = DEFAULT_GEMINI_BASE_URL):
+                 base_url: str = DEFAULT_GEMINI_BASE_URL, max_tokens: int = 4096):
         if not api_key:
             raise LLMError("GEMINI_API_KEY is not set")
         self._key = api_key
@@ -19,6 +19,7 @@ class GeminiProvider:
         self.model = model
         self._timeout = timeout
         self._temperature = temperature
+        self._max_tokens = max_tokens
 
     def complete(self, system: str, user: str) -> str:
         payload = {
@@ -26,7 +27,7 @@ class GeminiProvider:
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {
                 "temperature": self._temperature,
-                "maxOutputTokens": 4096,
+                "maxOutputTokens": self._max_tokens,
                 "responseMimeType": "application/json",
             },
         }
